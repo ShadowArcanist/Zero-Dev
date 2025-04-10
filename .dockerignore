@@ -1,0 +1,46 @@
+# Exclude everything by default
+**
+
+# ------------------------------------------------------------------------------------
+# Root-level essential files (adjust if more are needed)
+!Dockerfile
+!docker-compose.yaml
+!package.json
+!tsconfig.json
+!bun.lock
+!bunfig.toml
+!.npmrc
+!.prettierrc
+!.husky/**
+
+# ------------------------------------------------------------------------------------
+# Application Code for the mail service (the primary production app)
+!apps/mail/**
+!apps/mail/package.json
+!apps/mail/next.config.ts
+!apps/mail/tsconfig.json
+
+# Public assets (if these are used at runtime)
+!apps/mail/public/**
+
+# ------------------------------------------------------------------------------------
+# Include dependent internal packages if needed by the mail service
+
+# Database package (if mail depends on db)
+!packages/db/**
+!packages/db/package.json
+!packages/db/drizzle.config.ts
+
+# If you have shared UI libraries, utilities, or configuration packages, include them similarly.
+!packages/tsconfig/**      
+!packages/tailwind-config/** 
+
+# ------------------------------------------------------------------------------------
+# Exclude development artifacts not needed in production
+**/node_modules
+**/dist
+**/build
+**/coverage
+**/*.log
+**/.git
+.git
