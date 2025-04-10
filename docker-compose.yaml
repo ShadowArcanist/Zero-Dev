@@ -1,39 +1,100 @@
+version: '3.8'
 services:
   db:
     container_name: zerodotemail-db
-    image: postgres:17
+    image: 'postgres:17'
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: zerodotemail
-      PGDATA: /var/lib/postgresql/data/pgdata
+      - 'POSTGRES_USER=${POSTGRES_USER:-postgres}'
+      - 'POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}'
+      - 'POSTGRES_DB=${POSTGRES_DB:-zerodotemail}'
+      - PGDATA=/var/lib/postgresql/data/pgdata
     ports:
-      - 5432:5432
+      - '5432:5432'
     volumes:
-      - postgres-data:/var/lib/postgresql/data
-
+      - 'postgres-data:/var/lib/postgresql/data'
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'pg_isready -U postgres'
+      interval: 10s
+      timeout: 5s
+      retries: 5
   valkey:
     container_name: zerodotemail-redis
-    image: docker.io/bitnami/valkey:8.0
+    image: 'docker.io/bitnami/valkey:8.0'
+    restart: unless-stopped
     environment:
-      - ALLOW_EMPTY_PASSWORD=yes
-      - VALKEY_DISABLE_COMMANDS=FLUSHDB,FLUSHALL
-    ports:
-      - 6379:6379
+      - 'ALLOW_EMPTY_PASSWORD=${ALLOW_EMPTY_PASSWORD:-yes}'
+      - 'VALKEY_DISABLE_COMMANDS=${VALKEY_DISABLE_COMMANDS:-FLUSHDB,FLUSHALL}'
     volumes:
-      - valkey-data:/bitnami/valkey/data
-
+      - 'valkey-data:/bitnami/valkey/data'
+    healthcheck:
+      test:
+        - CMD
+        - valkey-cli
+        - ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
   upstash-proxy:
     container_name: zerodotemail-upstash-proxy
-    image: hiett/serverless-redis-http:latest
+    image: 'hiett/serverless-redis-http:latest'
+    restart: unless-stopped
     environment:
-      SRH_MODE: env
-      SRH_TOKEN: upstash-local-token
-      SRH_CONNECTION_STRING: "redis://valkey:6379"
-    ports:
-      - 8079:80
+      - 'SRH_MODE=${SRH_MODE:-env}'
+      - 'SRH_TOKEN=${SRH_TOKEN:-upstash-local-token}'
+      - 'SRH_CONNECTION_STRING=${SRH_CONNECTION_STRING:-"redis://valkey:6379"}'
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'pgrep -f beam.smp > /dev/null'
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  app:
+    container_name: zerodotemail-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      upstash-proxy:
+        condition: service_healthy
+    environment:
+      - SERVICE_FQDN_ZEROMAIL_3000
+      - 'NODE_ENV=${NODE_ENV:-production}'
+      - 'NODE_OPTIONS=${NODE_OPTIONS:---no-experimental-fetch}'
+      - 'DATABASE_URL=${DATABASE_URL:-postgres://postgres:postgres@db:5432/zerodotemail}'
+      - 'REDIS_URL=${REDIS_URL:-redis://valkey:6379}'
+      - 'NEXT_PUBLIC_APP_URL=$SERVICE_FQDN_ZEROMAIL'
+      - 'BETTER_AUTH_SECRET=${SERVICE_PASSWORD_64_ZEROMAIL}'
+      - 'BETTER_AUTH_URL=$SERVICE_FQDN_ZEROMAIL'
+      - 'BETTER_AUTH_TRUSTED_ORIGINS=$SERVICE_FQDN_ZEROMAIL'
+      - 'GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}'
+      - 'GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}'
+      - 'GOOGLE_REDIRECT_URI=$SERVICE_FQDN_ZEROMAIL/api/v1/mail/auth/google/callback'
+      - 'GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}'
+      - 'GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}'
+      - 'GITHUB_REDIRECT_URI=$SERVICE_FQDN_ZEROMAIL/api/auth/callback/github'
+      - 'UPSTASH_REDIS_URL=${UPSTASH_REDIS_URL:-http://localhost:8079}'
+      - 'REDIS_TOKEN=${REDIS_TOKEN:-upstash-local-token}'
+      - 'RESEND_API_KEY=${RESEND_API_KEY}'
+      - 'OPENAI_API_KEY=${OPENAI_API_KEY}'
+      - 'AI_SYSTEM_PROMPT=${AI_SYSTEM_PROMPT}'
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'bun -e "fetch(''http://localhost:3000'').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"'
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      
 
 volumes:
-  valkey-data:
-  postgres-data:
+  valkey-data: null
+  postgres-data: null
