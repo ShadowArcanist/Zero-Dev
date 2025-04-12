@@ -72,7 +72,7 @@ services:
       upstash-proxy:
         condition: service_healthy
     environment:
-      - SERVICE_FQDN_ZEROMAIL=${SERVICE_FQDN_ZEROMAIL:-https://shadowarcanist.dev}
+      - 'SERVICE_FQDN_ZEROMAIL=${SERVICE_FQDN_ZEROMAIL}'
       - 'NODE_ENV=${NODE_ENV:-production}'
       - 'NODE_OPTIONS=${NODE_OPTIONS:---no-experimental-fetch}'
       - 'DATABASE_URL=${DATABASE_URL:-postgres://postgres:postgres@db:5432/zerodotemail}'
